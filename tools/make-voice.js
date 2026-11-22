@@ -34,6 +34,11 @@ const force = process.argv.includes('--force');
     made++;
     console.log(`${file}  ${text.slice(0, 60)}`);
   }
+  // Remove clips for phrases that no longer exist.
+  const keep = new Set(phrases.map(x => path.basename(x.file)));
+  for (const f of fs.readdirSync(path.join(root, 'audio'))) {
+    if (f.endsWith('.mp3') && !keep.has(f)) { fs.unlinkSync(path.join(root, 'audio', f)); console.log('removed old clip', f); }
+  }
   // List used by the service worker to make every clip available offline.
   fs.writeFileSync(path.join(root, 'audio', 'list.json'), JSON.stringify(phrases.map(x => x.file).sort(), null, 1));
   console.log(`Done: ${made} new clip(s), ${phrases.length} total.`);

@@ -1,5 +1,5 @@
 // Offline cache so the app (including the voice) works without internet once opened.
-const CACHE = 'toolijooga-v2';
+const CACHE = 'toolijooga-v3';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', e => {
   e.waitUntil((async () => {

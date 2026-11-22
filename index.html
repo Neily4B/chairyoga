@@ -112,6 +112,8 @@
   .prep .label { font-size: 1.3rem; color: var(--muted); font-weight: 700; margin-top: 8px; }
   .done { text-align: center; padding-top: 20px; }
   .done .flower { font-size: 4rem; }
+  .cheer { font-size: 1.9rem; font-weight: 800; color: var(--blue); margin: .1em 0 .3em; }
+  .done h1.cheer { font-size: 2.3rem; }
   details { background: #fff; border: 2px solid var(--line); border-radius: 16px; padding: 10px 16px; margin-top: 16px; }
   summary { font-weight: 700; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
 
@@ -127,6 +129,9 @@
 
 <script>
 "use strict";
+
+/* ---------- Personal touch ---------- */
+const NAME = 'Ingrid';
 
 /* ---------- Storage (safe) ---------- */
 const store = {
@@ -153,7 +158,27 @@ const BASE = {
   tL: [79, 219], tR: [121, 219],
   hr: 6.5, eyes: 1
 };
-const P = o => Object.assign({}, BASE, o || {});
+// Standing beside the chair (chair on the left), left hand resting on the chair back.
+const BASE_STAND = {
+  head: [130, 40], neck: [130, 62],
+  sL: [111, 70], sR: [149, 70],
+  eL: [97, 93], eR: [155, 100],
+  hL: [80, 110], hR: [153, 128],
+  hipL: [121, 134], hipR: [139, 134],
+  kL: [121, 180], kR: [139, 180],
+  aL: [121, 222], aR: [139, 222],
+  tL: [114, 228], tR: [146, 228],
+  hr: 6.5, eyes: 1, stand: 1
+};
+BASE.stand = 0;
+const P = (o, base) => Object.assign({}, base || BASE, o || {});
+const baseOf = e => e && e.stand ? BASE_STAND : BASE;
+// Moves the listed body points sideways/up (used for weight shifts and rising onto toes).
+function shift(base, dx, dy, keys) {
+  const o = {};
+  keys.forEach(k => { o[k] = [base[k][0] + dx, base[k][1] + dy]; });
+  return o;
+}
 
 // Mirror a pose (left/right swap) so exercises can be done on both sides.
 function mirror(o) {
@@ -185,6 +210,13 @@ const CHAIR = `
   <line x1="139" y1="158" x2="142" y2="230" stroke="${C.chairLeg}" stroke-width="7" stroke-linecap="round"/>
   <rect x="52" y="146" width="96" height="14" rx="6" fill="${C.seat}"/>`;
 
+const CHAIR_SIDE = `
+  <line x1="10" y1="232" x2="190" y2="232" stroke="${C.floor}" stroke-width="3" stroke-linecap="round"/>
+  <rect x="22" y="106" width="56" height="70" rx="9" fill="${C.chairBack}"/>
+  <line x1="23" y1="180" x2="20" y2="230" stroke="${C.chairLeg}" stroke-width="7" stroke-linecap="round"/>
+  <line x1="77" y1="180" x2="80" y2="230" stroke="${C.chairLeg}" stroke-width="7" stroke-linecap="round"/>
+  <rect x="14" y="170" width="72" height="13" rx="6" fill="${C.seat}"/>`;
+
 function poseSVG(p) {
   const L = (a, b, w, c) => `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
   const [hx, hy] = p.head;
@@ -194,7 +226,9 @@ function poseSVG(p) {
     : `<path d="M${hx - 8} ${hy + 1} q2 2 4 0 M${hx + 4} ${hy + 1} q2 2 4 0" stroke="${C.face}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
   return `
   <g>
-    <path d="M${p.hipL} L${p.hipR} L${p.kR} L${p.kL} Z" fill="${C.pants}" stroke="${C.pants}" stroke-width="12" stroke-linejoin="round"/>
+    ${p.stand > 0.5
+      ? L(p.hipL, p.hipR, 14, C.pants) + L(p.hipL, p.kL, 13, C.pants) + L(p.hipR, p.kR, 13, C.pants)
+      : `<path d="M${p.hipL} L${p.hipR} L${p.kR} L${p.kL} Z" fill="${C.pants}" stroke="${C.pants}" stroke-width="12" stroke-linejoin="round"/>`}
     ${L(p.kL, p.aL, 11, C.pants)}${L(p.kR, p.aR, 11, C.pants)}
     ${L(p.aL, p.tL, 9, C.shoe)}${L(p.aR, p.tR, 9, C.shoe)}
     <path d="M${p.sL} L${p.sR} L${p.hipR} L${p.hipL} Z" fill="${C.shirt}" stroke="${C.shirt}" stroke-width="12" stroke-linejoin="round"/>
@@ -215,17 +249,19 @@ function poseSVG(p) {
   </g>`;
 }
 
-function figureSVG(pose, cls, label) {
-  return `<svg class="${cls || 'figure'}" viewBox="0 0 200 240" role="img" aria-label="${label || 'Joonis'}">${CHAIR}<g class="fig">${poseSVG(P(pose))}</g></svg>`;
+function figureSVG(pose, cls, label, base) {
+  base = base || BASE;
+  return `<svg class="${cls || 'figure'}" viewBox="0 0 200 240" role="img" aria-label="${label || 'Joonis'}">${base.stand ? CHAIR_SIDE : CHAIR}<g class="fig">${poseSVG(P(pose, base))}</g></svg>`;
 }
+const exFigure = (e, cls) => figureSVG(e.frames[0].p, cls, e.title, baseOf(e));
 
 const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
 /* Animates an SVG through keyframes. Returns a controller. */
 const running = new Set();
-function animate(svg, frames, onCue) {
+function animate(svg, frames, onCue, base) {
   const g = svg.querySelector('.fig');
-  const fs = frames.map(f => ({ d: f.d, p: P(f.p), say: f.say || '' }));
+  const fs = frames.map(f => ({ d: f.d, p: P(f.p, base), say: f.say || '' }));
   const total = fs.reduce((s, f) => s + f.d, 0);
   let t = 0, last = performance.now(), paused = false, raf = 0, lastCue = null;
   const ctl = {
@@ -417,15 +453,104 @@ const EX = [
       { d: 5, p: { head: [100, 50], eyes: 0 }, say: 'Hinga sisse…' },
       { d: 6, p: { eyes: 0 }, say: 'Hinga välja…' }
     ]
+  },
+
+  /* ----- Standing: always beside the chair, one hand on the chair back ----- */
+  {
+    id: 'kaal', stand: true, title: 'Kehakaalu nihutamine', sub: 'Parandab tasakaalu.',
+    steps: ['Seisa tooli kõrval, üks käsi tooli seljatoel.', 'Jalad on puusade laiuselt.', 'Vii kehakaal aeglaselt paremale jalale.', 'Seejärel vii kehakaal aeglaselt vasakule jalale.', 'Jalad jäävad kogu aeg põrandale.'],
+    reps: '5 korda kummalegi poole',
+    frames: [
+      { d: 2.5, p: Object.assign(shift(BASE_STAND, 7, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), shift(BASE_STAND, 4, 0, ['kL', 'kR', 'eL'])), say: 'Raskus paremale jalale' },
+      { d: 2, p: Object.assign(shift(BASE_STAND, 7, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), shift(BASE_STAND, 4, 0, ['kL', 'kR', 'eL'])), say: 'Hoia' },
+      { d: 2.5, p: Object.assign(shift(BASE_STAND, -6, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), shift(BASE_STAND, -3, 0, ['kL', 'kR', 'eL'])), say: 'Raskus vasakule jalale' },
+      { d: 2, p: Object.assign(shift(BASE_STAND, -6, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), shift(BASE_STAND, -3, 0, ['kL', 'kR', 'eL'])), say: 'Hoia' }
+    ]
+  },
+  {
+    id: 'varbad', stand: true, title: 'Varvastele tõusmine', sub: 'Tugevdab sääri ja parandab tasakaalu.',
+    steps: ['Seisa sirgelt ja hoia toolist kinni.', 'Tõuse aeglaselt varvastele.', 'Hoia hetk.', 'Lase kannad aeglaselt alla.'],
+    reps: '8 korda',
+    care: 'Kui tasakaal kõigub, hoia toolist kahe käega kinni.',
+    frames: [
+      { d: 2, p: Object.assign(shift(BASE_STAND, 0, -8, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR', 'kL', 'kR', 'aL', 'aR']), shift(BASE_STAND, 0, -4, ['eL'])), say: 'Tõuse varvastele' },
+      { d: 1.5, p: Object.assign(shift(BASE_STAND, 0, -8, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR', 'kL', 'kR', 'aL', 'aR']), shift(BASE_STAND, 0, -4, ['eL'])), say: 'Hoia' },
+      { d: 2, p: {}, say: 'Aeglaselt alla' },
+      { d: 1.5, p: {}, say: 'Puhka' }
+    ]
+  },
+  {
+    id: 'kulgjalg', stand: true, title: 'Jala tõstmine küljele', sub: 'Tugevdab puusi ja aitab tasakaalu.',
+    steps: ['Seisa sirgelt ja hoia toolist kinni.', 'Tõsta parem jalg sirgelt veidi külje peale.', 'Too jalg aeglaselt tagasi.', 'Seejärel keera end ümber, hoia teise käega toolist kinni ja korda vasaku jalaga.'],
+    reps: '5 korda kummagi jalaga',
+    care: 'Ülakeha jääb sirgeks. Jalga ei pea kõrgele tõstma.',
+    frames: [
+      { d: 2, p: { kR: [148, 177], aR: [160, 217], tR: [168, 220], head: [127, 40], neck: [128, 62], sL: [109, 71], sR: [147, 70] }, say: 'Jalg küljele' },
+      { d: 1.5, p: { kR: [148, 177], aR: [160, 217], tR: [168, 220], head: [127, 40], neck: [128, 62], sL: [109, 71], sR: [147, 70] }, say: 'Hoia' },
+      { d: 2, p: {}, say: 'Jalg tagasi' },
+      { d: 1.5, p: {}, say: 'Puhka' }
+    ]
+  },
+  {
+    id: 'polv-seistes', stand: true, title: 'Põlve tõstmine seistes', sub: 'Tugevdab jalgu ja parandab tasakaalu.',
+    steps: ['Seisa sirgelt ja hoia toolist kinni.', 'Tõsta parem põlv aeglaselt üles ja pane jalg alla.', 'Tõsta vasak põlv aeglaselt üles ja pane jalg alla.', 'Jätka rahulikult vaheldumisi.'],
+    reps: '5 korda kummagi jalaga',
+    care: 'Põlve ei pea kõrgele tõstma. Seisa kindlalt.',
+    frames: [
+      { d: 1.6, p: { kR: [141, 160], aR: [143, 200], tR: [149, 204] }, say: 'Parem põlv üles' },
+      { d: 1.6, p: {}, say: 'Alla' },
+      { d: 1.6, p: { kL: [119, 160], aL: [117, 200], tL: [111, 204] }, say: 'Vasak põlv üles' },
+      { d: 1.6, p: {}, say: 'Alla' }
+    ]
+  },
+  {
+    id: 'yhel-jalal', stand: true, title: 'Ühel jalal seismine', sub: 'Treenib tasakaalu.',
+    steps: ['Seisa sirgelt ja hoia toolist kinni.', 'Vii kehakaal vasakule jalale.', 'Tõsta parem jalg veidi põrandast üles.', 'Hoia 5 sekundit ja pane jalg alla.', 'Korda teise jalaga.'],
+    reps: '3 korda kummagi jalaga',
+    care: 'Hoia toolist kindlalt kinni. Kui tunned end ebakindlalt, pane jalg kohe maha.',
+    frames: [
+      { d: 2, p: shift(BASE_STAND, -4, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), say: 'Raskus vasakule jalale' },
+      { d: 1.5, p: Object.assign(shift(BASE_STAND, -4, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), { kR: [137, 184], aR: [139, 212], tR: [145, 214] }), say: 'Tõsta parem jalg veidi' },
+      { d: 5, p: Object.assign(shift(BASE_STAND, -4, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), { kR: [137, 184], aR: [139, 212], tR: [145, 214] }), say: 'Hoia… ole rahulik' },
+      { d: 1.5, p: {}, say: 'Jalg alla' },
+      { d: 2, p: shift(BASE_STAND, 5, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), say: 'Raskus paremale jalale' },
+      { d: 1.5, p: Object.assign(shift(BASE_STAND, 5, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), { kL: [123, 184], aL: [121, 212], tL: [115, 214] }), say: 'Tõsta vasak jalg veidi' },
+      { d: 5, p: Object.assign(shift(BASE_STAND, 5, 0, ['head', 'neck', 'sL', 'sR', 'eR', 'hR', 'hipL', 'hipR']), { kL: [123, 184], aL: [121, 212], tL: [115, 214] }), say: 'Hoia… ole rahulik' },
+      { d: 1.5, p: {}, say: 'Jalg alla' }
+    ]
+  },
+  {
+    id: 'keeramine-seistes', stand: true, title: 'Keeramine seistes', sub: 'Õrn keeramine liigutab selga ja puusi.',
+    steps: ['Seisa sirgelt, üks käsi tooli seljatoel, teine käsi puusal.', 'Jalad jäävad paigale.', 'Keera ülakeha ja pead aeglaselt paremale.', 'Tule tagasi keskele.', 'Keera aeglaselt vasakule ja tule tagasi keskele.'],
+    reps: '3 korda kummalegi poole',
+    care: 'Keera väikese liigutusega. Ära keera jõuga.',
+    frames: [
+      { d: 3, p: { hR: [141, 131], eR: [159, 108], sL: [117, 71], sR: [148, 69], head: [136, 41], neck: [132, 62] }, say: 'Keera paremale' },
+      { d: 2.5, p: { hR: [141, 131], eR: [159, 108], sL: [117, 71], sR: [148, 69], head: [136, 41], neck: [132, 62] }, say: 'Hoia ja hinga' },
+      { d: 3, p: { hR: [141, 131], eR: [159, 108] }, say: 'Keskele' },
+      { d: 3, p: { hR: [140, 131], eR: [156, 108], sL: [110, 69], sR: [141, 71], head: [124, 41], neck: [128, 62] }, say: 'Keera vasakule' },
+      { d: 2.5, p: { hR: [140, 131], eR: [156, 108], sL: [110, 69], sR: [141, 71], head: [124, 41], neck: [128, 62] }, say: 'Hoia ja hinga' },
+      { d: 3, p: { hR: [141, 131], eR: [159, 108] }, say: 'Keskele' }
+    ]
   }
 ];
+const SEATED = EX.filter(e => !e.stand), STANDING = EX.filter(e => e.stand);
 const byId = Object.fromEntries(EX.map(e => [e.id, e]));
 
 const PLANS = {
-  luhike: { name: 'Lühike kava', about: 'umbes 7 minutit', secs: 45, ids: ['hingamine', 'kael', 'olad', 'kaed', 'kulg', 'marss', 'pahkluu', 'lodvestus'] },
-  pikk: { name: 'Täispikk kava', about: 'umbes 15 minutit', secs: 60, ids: EX.map(e => e.id) }
+  luhike: { name: 'Lühike kava', about: 'istudes · umbes 7 minutit', secs: 45, ids: ['hingamine', 'kael', 'olad', 'kaed', 'kulg', 'marss', 'pahkluu', 'lodvestus'] },
+  pikk: { name: 'Täispikk kava', about: 'istudes · umbes 15 minutit', secs: 60, ids: SEATED.map(e => e.id) },
+  tasakaal: { name: 'Tasakaal seistes', about: 'seistes, toolist kinni hoides · umbes 10 minutit', secs: 50, ids: ['hingamine', 'olad', 'kael'].concat(STANDING.map(e => e.id), ['lodvestus']) }
 };
-const PREP_SECS = 6;
+const PREP_SECS = 6, MOVE_SECS = 12;
+// Standing up or sitting back down between exercises gets extra time and its own instruction.
+function transitionAt(plan, idx) {
+  const e = byId[plan.ids[idx]], prev = idx > 0 ? byId[plan.ids[idx - 1]] : null;
+  if (e.stand && !(prev && prev.stand)) return 'up';
+  if (!e.stand && prev && prev.stand) return 'down';
+  return '';
+}
+const prepSecs = (plan, idx) => transitionAt(plan, idx) ? MOVE_SECS : PREP_SECS;
 
 /* ---------- Helpers ---------- */
 const $app = document.getElementById('app');
@@ -476,7 +601,7 @@ const sound = {
 /* ---------- Narration (pre-recorded Estonian voice clips in audio/) ----------
    Each phrase lives in audio/<hash>.mp3, where <hash> is computed from the spoken text.
    Regenerate with: node tools/make-voice.js  (a family recording can replace any file). */
-const SPEECH_FIX = { 'Hoia… 1, 2, 3': 'Hoia. Üks. Kaks. Kolm.' };
+const SPEECH_FIX = { 'Hoia… 1, 2, 3': 'Hoia. Üks. Kaks. Kolm.', 'Hoia… ole rahulik': 'Hoia. Ole rahulik.' };
 const speechFor = t => (SPEECH_FIX[t] || t).replace(/…/g, '.').trim();
 function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
 const clipUrl = t => 'audio/' + hash(speechFor(t)) + '.mp3';
@@ -517,7 +642,9 @@ async function speak(texts, opts) {
 const PHRASES = {
   start: 'Valmistu, alustame!',
   next: 'Puhka hetk. Järgmine harjutus:',
-  done: 'Tubli! Harjutused on tehtud. Joo klaas vett ja puhka hetk.'
+  done: `Tubli, ${NAME}! Harjutused on tehtud. Joo klaas vett ja puhka hetk.`,
+  up: 'Tõuse aeglaselt püsti. Seisa tooli kõrval ja hoia ühe käega tooli seljatoest kinni.',
+  down: 'Istu aeglaselt toolile tagasi.'
 };
 const SAFETY = [
   'Kasuta tugevat tooli, millel ei ole rattaid. Kõige parem on panna tool vastu seina.',
@@ -528,13 +655,14 @@ const SAFETY = [
   'Iga päev natuke on parem kui harva palju.'
 ];
 const SAFETY_STOP = 'Lõpeta kohe ja puhka, kui tunned valu, pearinglust, iiveldust, valu rinnus või õhupuudust.';
+const SAFETY_STAND = 'Seistes harjutusi tee ainult siis, kui tunned end kindlalt. Hoia alati toolist kinni. Kanna libisemiskindlaid jalanõusid, mitte sokke.';
 const SAFETY_DOC = 'Kui sul on südame-, vererõhu- või liigeseprobleeme või oled hiljuti opereeritud, küsi enne alustamist nõu oma arstilt või füsioterapeudilt.';
-const safetySpeech = () => 'Enne alustamist. ' + SAFETY.join(' ') + ' ' + SAFETY_STOP + ' ' + SAFETY_DOC;
+const safetySpeech = () => 'Enne alustamist. ' + SAFETY.join(' ') + ' ' + SAFETY_STAND + ' ' + SAFETY_STOP + ' ' + SAFETY_DOC;
 const guideSpeech = e => `${e.title}. ${e.sub} ${e.steps.join(' ')} Kordused: ${e.reps}.` + (e.care ? ` Ettevaatust! ${e.care}` : '');
 
 // Every phrase the app can say — used by tools/make-voice.js to generate the clips.
 function allPhrases() {
-  const s = new Set([PHRASES.start, PHRASES.next, PHRASES.done, safetySpeech()]);
+  const s = new Set(Object.values(PHRASES).concat(safetySpeech()));
   EX.forEach(e => { s.add(e.title); s.add(guideSpeech(e)); e.frames.forEach(f => f.say && s.add(f.say)); });
   return [...s].map(t => ({ text: speechFor(t), file: clipUrl(t) }));
 }
@@ -557,7 +685,8 @@ function homeView() {
     <div class="hero">
       ${figureSVG({ eL: [70, 58], eR: [130, 58], hL: [82, 26], hR: [118, 26] }, '', 'Naine istub toolil, käed üleval')}
       <h1>Toolijooga</h1>
-      <p class="muted">${greeting()} Rahulikud harjutused toolil istudes.</p>
+      <p class="cheer">Mine, ${NAME}!</p>
+      <p class="muted">${greeting()} Rahulikud harjutused toolil istudes ja seistes.</p>
     </div>
     <div class="stat">${logStats()}</div>
     <button class="btn" data-go="#/kava"><span class="big">▶</span> Alusta harjutamist</button>
@@ -576,7 +705,7 @@ function planView() {
     <h1>Vali kava</h1>
     <p class="muted">Rakendus näitab iga harjutust ja loeb aega. Sina lihtsalt tee kaasa.</p>
     ${Object.entries(PLANS).map(([k, p]) => `
-      <button class="btn ${k === 'pikk' ? 'sec' : ''}" data-go="#/harjuta/${k}">
+      <button class="btn ${k === 'luhike' ? '' : 'sec'}" data-go="#/harjuta/${k}">
         <span class="stack">${p.name}<small>${p.about} · ${p.ids.length} harjutust</small></span>
       </button>`).join('')}
     <p class="muted center" style="margin-top:20px">Pane telefon või tahvel enda ette nii, et ekraan on hästi näha.</p>`;
@@ -590,6 +719,7 @@ function safetyView() {
     ${listenBtn('safety')}
     <ol class="steps">${SAFETY.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
     <div class="box warn"><b>${esc(SAFETY_STOP)}</b></div>
+    <div class="box warn">${esc(SAFETY_STAND)}</div>
     <div class="box warn">${esc(SAFETY_DOC)}</div>
     <button class="btn" data-go="#/kava">Sain aru – alustame</button>`;
 }
@@ -600,13 +730,18 @@ function bookView() {
     <div class="topbar"><button class="back" data-go="#/">◀ Tagasi</button></div>
     <h1>Harjutuste raamat</h1>
     <p class="muted">Vajuta harjutusele, et näha, kuidas seda teha.</p>
-    <div class="list">
-      ${EX.map((e, i) => `
-        <button class="card" data-go="#/raamat/${e.id}">
-          ${figureSVG(e.frames[0].p, '', e.title)}
-          <span><span class="num">${i + 1}.</span> <span class="t">${e.title}</span><br><span class="s">${e.sub}</span></span>
-        </button>`).join('')}
-    </div>`;
+    <h2>Istudes</h2>
+    <div class="list">${SEATED.map(bookCard).join('')}</div>
+    <h2 style="margin-top:1.2em">Seistes</h2>
+    <div class="box warn">${esc(SAFETY_STAND)}</div>
+    <div class="list">${STANDING.map(bookCard).join('')}</div>`;
+}
+function bookCard(e) {
+  return `
+    <button class="card" data-go="#/raamat/${e.id}">
+      ${exFigure(e, '')}
+      <span><span class="num">${EX.indexOf(e) + 1}.</span> <span class="t">${e.title}</span><br><span class="s">${e.sub}</span></span>
+    </button>`;
 }
 
 function listenBtn(what) {
@@ -631,7 +766,7 @@ function pageView(id) {
       <div>
         <h1>${e.title}</h1>
         <p class="muted">${e.sub}</p>
-        ${figureSVG(e.frames[0].p, 'figure', e.title)}
+        ${exFigure(e, 'figure')}
         <div class="cue" id="cue"></div>
       </div>
       <div>
@@ -644,7 +779,7 @@ function pageView(id) {
       </div>
     </div>`;
   const cue = document.getElementById('cue');
-  animate($app.querySelector('svg.figure'), e.frames, t => { cue.textContent = t; });
+  animate($app.querySelector('svg.figure'), e.frames, t => { cue.textContent = t; }, baseOf(e));
   loadClip(guideSpeech(e));
 }
 
@@ -655,9 +790,9 @@ function startSession(planKey) {
   const plan = PLANS[planKey];
   if (!plan) return go('#/kava');
   audio();
-  session = { plan, idx: 0, phase: 'prep', left: PREP_SECS, paused: false, anim: null, started: Date.now() };
+  session = { plan, idx: 0, phase: 'prep', left: prepSecs(plan, 0), paused: false, anim: null, started: Date.now() };
   // Preload this plan's voice clips so they play on time.
-  [PHRASES.start, PHRASES.next, PHRASES.done].concat(...plan.ids.map(id => [byId[id].title].concat(byId[id].frames.map(f => f.say)))).forEach(t => t && loadClip(t));
+  Object.values(PHRASES).concat(...plan.ids.map(id => [byId[id].title].concat(byId[id].frames.map(f => f.say)))).forEach(t => t && loadClip(t));
   keepAwake(true);
   renderSession();
   clearInterval(ticker);
@@ -677,7 +812,7 @@ function advance(dir) {
   const s = session; if (!s) return;
   if (dir > 0) {
     if (s.phase === 'prep') { s.phase = 'go'; s.left = s.plan.secs; sound.chime(); }
-    else if (s.idx < s.plan.ids.length - 1) { s.idx++; s.phase = 'prep'; s.left = PREP_SECS; sound.chime(); }
+    else if (s.idx < s.plan.ids.length - 1) { s.idx++; s.phase = 'prep'; s.left = prepSecs(s.plan, s.idx); sound.chime(); }
     else return finishSession();
   } else {
     if (s.phase === 'go' && s.plan.secs - s.left > 3) { s.left = s.plan.secs; }
@@ -691,14 +826,14 @@ function advance(dir) {
 function updateClock() {
   const s = session; if (!s) return;
   const t = document.getElementById('timer'), b = document.getElementById('bar');
-  const total = s.phase === 'prep' ? PREP_SECS : s.plan.secs;
+  const total = s.phase === 'prep' ? prepSecs(s.plan, s.idx) : s.plan.secs;
   if (t) t.textContent = s.phase === 'prep' ? Math.max(1, Math.ceil(s.left)) : fmt(s.left);
   if (b) b.style.width = (100 * (1 - s.left / total)) + '%';
 }
 
 function renderSession() {
   const s = session; stopAll();
-  const e = byId[s.plan.ids[s.idx]], n = s.plan.ids.length;
+  const e = byId[s.plan.ids[s.idx]], n = s.plan.ids.length, move = transitionAt(s.plan, s.idx);
   const toggles = `
     <div class="toggles">
       <button class="chip" data-act="sound" aria-pressed="${sound.on()}">🔔 Heli ${sound.on() ? 'sees' : 'väljas'}</button>
@@ -709,9 +844,10 @@ function renderSession() {
     $app.innerHTML = `
       <div class="sess-head"><span class="sess-count">Harjutus ${s.idx + 1} / ${n}</span><button class="back" data-act="quit">✕ Lõpeta</button></div>
       <div class="prep">
-        <div class="label">${s.idx === 0 ? 'Valmistu, alustame!' : 'Puhka hetk. Järgmine harjutus:'}</div>
+        ${move ? `<div class="box warn" style="font-size:1.2rem;font-weight:700">${move === 'up' ? '🧍 ' : '🪑 '}${esc(PHRASES[move])}</div>` : ''}
+        <div class="label">${s.idx === 0 ? PHRASES.start : 'Järgmine harjutus:'}</div>
         <div class="sess-title">${e.title}</div>
-        ${figureSVG(e.frames[0].p, 'figure sess-fig', e.title)}
+        ${exFigure(e, 'figure sess-fig')}
         <div class="timer" id="timer"></div>
         <div class="bar"><i id="bar"></i></div>
       </div>
@@ -721,14 +857,14 @@ function renderSession() {
         <button class="btn sec" data-act="next">Alusta<br>▶</button>
       </div>
       ${toggles}`;
-    if (!s.paused) speak([s.idx === 0 ? PHRASES.start : PHRASES.next, e.title]);
+    if (!s.paused) speak(move ? [PHRASES[move], e.title] : [s.idx === 0 ? PHRASES.start : PHRASES.next, e.title]);
   } else {
     $app.innerHTML = `
       <div class="sess-head"><span class="sess-count">Harjutus ${s.idx + 1} / ${n}</span><button class="back" data-act="quit">✕ Lõpeta</button></div>
       <div class="split">
         <div>
           <div class="sess-title">${e.title}</div>
-          ${figureSVG(e.frames[0].p, 'figure sess-fig', e.title)}
+          ${exFigure(e, 'figure sess-fig')}
           <div class="cue" id="cue"></div>
           <div class="timer" id="timer"></div>
           <div class="bar"><i id="bar"></i></div>
@@ -753,7 +889,7 @@ function renderSession() {
       cue.textContent = t;
       if (!t || session !== s || s.paused) return;
       if (total >= 6.5 || cycle < 2 || cycle % 3 === 0) speak([t], { ifIdle: true });
-    });
+    }, baseOf(e));
     s.anim.setPaused(s.paused);
   }
   updateClock();
@@ -771,7 +907,7 @@ function finishSession() {
   $app.innerHTML = `
     <div class="done">
       <div class="flower" aria-hidden="true">🌼</div>
-      <h1>Tubli!</h1>
+      <h1 class="cheer">Tubli, ${NAME}!!!</h1>
       <p style="font-size:1.2rem">Harjutused on tehtud.<br>Täna harjutasid umbes <b>${mins} ${mins === 1 ? 'minut' : 'minutit'}</b>.</p>
       <p class="muted">Joo klaas vett ja puhka hetk.</p>
       <button class="btn" data-go="#/">Avalehele</button>

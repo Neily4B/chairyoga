@@ -8,7 +8,7 @@ The name used on the start and finish screens is set by `NAME` near the top of `
 - **Alusta harjutamist** (guided session): short seated (~7 min), full seated (~15 min) or standing balance (~10 min) plan;
   the app tells her when to stand up and sit back down, with extra time for each. Shows each exercise, animates it with spoken-style cues ("Hinga sisse…"), counts down, chimes between exercises and keeps the screen awake.
 - Large buttons, adjustable text size, no login, no adverts, no data leaves the device.
-- **Narrated in Estonian**: a calm voice ("Liivika", University of Tartu neural TTS, slightly slowed) speaks the cues during sessions,
+- **Narrated in Estonian**: a calm voice ("Külli", University of Tartu neural TTS, slightly slowed) speaks the cues during sessions,
   and every book page and the safety page has a **🔊 Kuula juhendit** (listen) button. Clips are stored in `audio/` and work offline.
 
 ## Voice clips

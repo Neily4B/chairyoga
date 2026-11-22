@@ -7,7 +7,7 @@ const { chromium } = require('playwright');
 const { execFileSync } = require('child_process');
 const fs = require('fs'), path = require('path'), os = require('os');
 
-const VOICE = 'liivika';   // calm female voice
+const VOICE = 'kylli';     // female voice (Külli)
 const SPEED = 0.85;        // a little slower than normal, for a lulling pace
 const root = path.join(__dirname, '..');
 const force = process.argv.includes('--force');

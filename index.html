@@ -239,7 +239,7 @@ function animate(svg, frames, onCue) {
     while (tt > fs[i].d) { tt -= fs[i].d; i++; }
     const prev = fs[(i - 1 + fs.length) % fs.length];
     g.innerHTML = poseSVG(lerpPose(prev.p, fs[i].p, ease(Math.min(1, tt / fs[i].d))));
-    if (onCue && fs[i].say !== lastCue) { lastCue = fs[i].say; onCue(lastCue); }
+    if (onCue && fs[i].say !== lastCue) { lastCue = fs[i].say; onCue(lastCue, Math.floor(t / total), total); }
     raf = requestAnimationFrame(step);
   }
   raf = requestAnimationFrame(step);
@@ -473,14 +473,70 @@ const sound = {
   tick() { if (this.on()) tone(520, 0, .15, .12); }
 };
 
-let etVoice = null;
-function findVoice() {
-  try { etVoice = (speechSynthesis.getVoices() || []).find(v => /^et/i.test(v.lang)) || null; } catch (e) { etVoice = null; }
+/* ---------- Narration (pre-recorded Estonian voice clips in audio/) ----------
+   Each phrase lives in audio/<hash>.mp3, where <hash> is computed from the spoken text.
+   Regenerate with: node tools/make-voice.js  (a family recording can replace any file). */
+const SPEECH_FIX = { 'Hoia… 1, 2, 3': 'Hoia. Üks. Kaks. Kolm.' };
+const speechFor = t => (SPEECH_FIX[t] || t).replace(/…/g, '.').trim();
+function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
+const clipUrl = t => 'audio/' + hash(speechFor(t)) + '.mp3';
+
+const voiceOn = () => store.get('tj_voice', true);
+const clips = new Map();
+function loadClip(text) {
+  const url = clipUrl(text);
+  if (!clips.has(url)) {
+    clips.set(url, fetch(url)
+      .then(r => { if (!r.ok) throw new Error('missing'); return r.arrayBuffer(); })
+      .then(ab => new Promise((res, rej) => audio().decodeAudioData(ab, res, rej)))
+      .catch(() => { clips.delete(url); return null; }));
+  }
+  return clips.get(url);
 }
-if ('speechSynthesis' in window) { findVoice(); speechSynthesis.onvoiceschanged = findVoice; }
-function say(text) {
-  if (!etVoice || !store.get('tj_voice', true)) return;
-  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.voice = etVoice; u.lang = etVoice.lang; u.rate = .9; speechSynthesis.speak(u); } catch (e) {}
+let voiceSrc = [], voiceEnd = 0, speakToken = 0;
+function voiceStop() { speakToken++; voiceSrc.forEach(s => { try { s.stop(); } catch (e) {} }); voiceSrc = []; voiceEnd = 0; }
+const voiceBusy = () => actx && actx.currentTime < voiceEnd;
+// Plays phrases one after another. opts.ifIdle: skip if something is already being said.
+async function speak(texts, opts) {
+  opts = opts || {};
+  if (!voiceOn() || !audio()) return;
+  if (opts.ifIdle && voiceBusy()) return;
+  const token = opts.ifIdle ? speakToken : ++speakToken;
+  const bufs = await Promise.all(texts.map(loadClip));
+  if (token !== speakToken || (opts.ifIdle && voiceBusy())) return;
+  if (!opts.ifIdle) { voiceSrc.forEach(s => { try { s.stop(); } catch (e) {} }); voiceSrc = []; voiceEnd = 0; }
+  let t = Math.max(actx.currentTime + 0.05, voiceEnd);
+  for (const b of bufs) {
+    if (!b) continue;
+    const s = actx.createBufferSource(); s.buffer = b; s.connect(actx.destination); s.start(t);
+    voiceSrc.push(s); t += b.duration + 0.3;
+  }
+  voiceEnd = t;
+}
+
+const PHRASES = {
+  start: 'Valmistu, alustame!',
+  next: 'Puhka hetk. Järgmine harjutus:',
+  done: 'Tubli! Harjutused on tehtud. Joo klaas vett ja puhka hetk.'
+};
+const SAFETY = [
+  'Kasuta tugevat tooli, millel ei ole rattaid. Kõige parem on panna tool vastu seina.',
+  'Istu tooli esiosas, selg sirge, mõlemad jalad täies ulatuses põrandal.',
+  'Kanna mugavaid riideid. Hoia veeklaas lähedal.',
+  'Liigu aeglaselt ja rahulikult. Ära hoia hinge kinni.',
+  'Kerge venitus on hea, valu ei ole. Tee ainult nii palju, kui on mugav.',
+  'Iga päev natuke on parem kui harva palju.'
+];
+const SAFETY_STOP = 'Lõpeta kohe ja puhka, kui tunned valu, pearinglust, iiveldust, valu rinnus või õhupuudust.';
+const SAFETY_DOC = 'Kui sul on südame-, vererõhu- või liigeseprobleeme või oled hiljuti opereeritud, küsi enne alustamist nõu oma arstilt või füsioterapeudilt.';
+const safetySpeech = () => 'Enne alustamist. ' + SAFETY.join(' ') + ' ' + SAFETY_STOP + ' ' + SAFETY_DOC;
+const guideSpeech = e => `${e.title}. ${e.sub} ${e.steps.join(' ')} Kordused: ${e.reps}.` + (e.care ? ` Ettevaatust! ${e.care}` : '');
+
+// Every phrase the app can say — used by tools/make-voice.js to generate the clips.
+function allPhrases() {
+  const s = new Set([PHRASES.start, PHRASES.next, PHRASES.done, safetySpeech()]);
+  EX.forEach(e => { s.add(e.title); s.add(guideSpeech(e)); e.frames.forEach(f => f.say && s.add(f.say)); });
+  return [...s].map(t => ({ text: speechFor(t), file: clipUrl(t) }));
 }
 
 /* ---------- Keep screen awake during a session ---------- */
@@ -531,16 +587,10 @@ function safetyView() {
   $app.innerHTML = `
     <div class="topbar"><button class="back" data-go="#/">◀ Tagasi</button></div>
     <h1>Enne alustamist</h1>
-    <ol class="steps">
-      <li>Kasuta tugevat tooli, millel <b>ei ole rattaid</b>. Kõige parem on panna tool vastu seina.</li>
-      <li>Istu tooli esiosas, selg sirge, mõlemad jalad täies ulatuses põrandal.</li>
-      <li>Kanna mugavaid riideid. Hoia veeklaas lähedal.</li>
-      <li>Liigu aeglaselt ja rahulikult. Ära hoia hinge kinni.</li>
-      <li>Kerge venitus on hea, <b>valu ei ole</b>. Tee ainult nii palju, kui on mugav.</li>
-      <li>Iga päev natuke on parem kui harva palju.</li>
-    </ol>
-    <div class="box warn"><b>Lõpeta kohe ja puhka</b>, kui tunned valu, pearinglust, iiveldust, valu rinnus või õhupuudust.</div>
-    <div class="box warn">Kui sul on südame-, vererõhu- või liigeseprobleeme või oled hiljuti opereeritud, küsi enne alustamist nõu oma arstilt või füsioterapeudilt.</div>
+    ${listenBtn('safety')}
+    <ol class="steps">${SAFETY.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
+    <div class="box warn"><b>${esc(SAFETY_STOP)}</b></div>
+    <div class="box warn">${esc(SAFETY_DOC)}</div>
     <button class="btn" data-go="#/kava">Sain aru – alustame</button>`;
 }
 
@@ -557,6 +607,10 @@ function bookView() {
           <span><span class="num">${i + 1}.</span> <span class="t">${e.title}</span><br><span class="s">${e.sub}</span></span>
         </button>`).join('')}
     </div>`;
+}
+
+function listenBtn(what) {
+  return `<button class="btn sec small listen" data-act="listen" data-what="${what}">🔊 Kuula juhendit</button>`;
 }
 
 function exerciseBody(e) {
@@ -581,6 +635,7 @@ function pageView(id) {
         <div class="cue" id="cue"></div>
       </div>
       <div>
+        ${listenBtn(e.id)}
         ${exerciseBody(e)}
         <div class="row">
           ${prev ? `<button class="btn sec small" data-go="#/raamat/${prev.id}">◀ Eelmine</button>` : '<span></span>'}
@@ -590,6 +645,7 @@ function pageView(id) {
     </div>`;
   const cue = document.getElementById('cue');
   animate($app.querySelector('svg.figure'), e.frames, t => { cue.textContent = t; });
+  loadClip(guideSpeech(e));
 }
 
 /* ---------- Guided session ---------- */
@@ -600,6 +656,8 @@ function startSession(planKey) {
   if (!plan) return go('#/kava');
   audio();
   session = { plan, idx: 0, phase: 'prep', left: PREP_SECS, paused: false, anim: null, started: Date.now() };
+  // Preload this plan's voice clips so they play on time.
+  [PHRASES.start, PHRASES.next, PHRASES.done].concat(...plan.ids.map(id => [byId[id].title].concat(byId[id].frames.map(f => f.say)))).forEach(t => t && loadClip(t));
   keepAwake(true);
   renderSession();
   clearInterval(ticker);
@@ -644,7 +702,7 @@ function renderSession() {
   const toggles = `
     <div class="toggles">
       <button class="chip" data-act="sound" aria-pressed="${sound.on()}">🔔 Heli ${sound.on() ? 'sees' : 'väljas'}</button>
-      ${etVoice ? `<button class="chip" data-act="voice" aria-pressed="${store.get('tj_voice', true)}">🗣 Hääl ${store.get('tj_voice', true) ? 'sees' : 'väljas'}</button>` : ''}
+      <button class="chip" data-act="voice" aria-pressed="${voiceOn()}">🗣 Hääl ${voiceOn() ? 'sees' : 'väljas'}</button>
     </div>`;
   $app.className = 'wrap wide';
   if (s.phase === 'prep') {
@@ -663,7 +721,7 @@ function renderSession() {
         <button class="btn sec" data-act="next">Alusta<br>▶</button>
       </div>
       ${toggles}`;
-    say((s.idx === 0 ? 'Valmistu. ' : 'Järgmine harjutus. ') + e.title);
+    if (!s.paused) speak([s.idx === 0 ? PHRASES.start : PHRASES.next, e.title]);
   } else {
     $app.innerHTML = `
       <div class="sess-head"><span class="sess-count">Harjutus ${s.idx + 1} / ${n}</span><button class="back" data-act="quit">✕ Lõpeta</button></div>
@@ -689,7 +747,13 @@ function renderSession() {
         </div>
       </div>`;
     const cue = document.getElementById('cue');
-    s.anim = animate($app.querySelector('svg.figure'), e.frames, t => { cue.textContent = t; });
+    // Speak every cue for slow exercises; for quick ones, guide the first two rounds
+    // and then only every third round, so the voice stays calm rather than chattering.
+    s.anim = animate($app.querySelector('svg.figure'), e.frames, (t, cycle, total) => {
+      cue.textContent = t;
+      if (!t || session !== s || s.paused) return;
+      if (total >= 6.5 || cycle < 2 || cycle % 3 === 0) speak([t], { ifIdle: true });
+    });
     s.anim.setPaused(s.paused);
   }
   updateClock();
@@ -701,7 +765,7 @@ function finishSession() {
   const mins = Math.max(1, Math.round((Date.now() - s.started) / 60000));
   const log = store.get('tj_log', []); log.push(new Date().toISOString()); store.set('tj_log', log.slice(-200));
   session = null;
-  sound.chime(); say('Tubli! Harjutused on tehtud.');
+  sound.chime(); speak([PHRASES.done]);
   history.replaceState(null, '', '#/valmis');
   $app.className = 'wrap';
   $app.innerHTML = `
@@ -715,8 +779,7 @@ function finishSession() {
 }
 
 function quitSession() {
-  clearInterval(ticker); stopAll(); keepAwake(false);
-  try { speechSynthesis.cancel(); } catch (e) {}
+  clearInterval(ticker); stopAll(); keepAwake(false); voiceStop();
   session = null;
 }
 
@@ -726,6 +789,7 @@ function route() {
   const h = location.hash || '#/';
   const parts = h.slice(2).split('/');
   if (parts[0] !== 'harjuta' && session) quitSession();
+  if (parts[0] !== 'valmis') voiceStop();
   window.scrollTo(0, 0);
   switch (parts[0]) {
     case '': return homeView();
@@ -741,19 +805,28 @@ function route() {
 $app.addEventListener('click', ev => {
   const el = ev.target.closest('[data-go],[data-act],[data-size]');
   if (!el) return;
+  audio(); // unlock sound on the first tap (needed on iPad/iPhone)
   if (el.dataset.go) return go(el.dataset.go);
   if (el.dataset.size) { store.set('tj_size', +el.dataset.size); applySize(); return homeView(); }
   const a = el.dataset.act;
   if (a === 'quit') return go('#/');
+  if (a === 'listen') {
+    if (voiceBusy()) { voiceStop(); el.textContent = '🔊 Kuula juhendit'; return; }
+    const w = el.dataset.what;
+    el.textContent = '⏹ Peata';
+    speak([w === 'safety' ? safetySpeech() : guideSpeech(byId[w])]).then(() => { const tick = setInterval(() => { if (!voiceBusy() || !el.isConnected) { clearInterval(tick); if (el.isConnected) el.textContent = '🔊 Kuula juhendit'; } }, 500); });
+    return;
+  }
   if (!session) return;
   if (a === 'next') advance(1);
   else if (a === 'prev') advance(-1);
   else if (a === 'pause') {
     session.paused = !session.paused;
     if (session.anim) session.anim.setPaused(session.paused);
+    if (session.paused) voiceStop();
     el.textContent = session.paused ? '▶ Jätka' : '❚❚ Paus';
   } else if (a === 'sound') { store.set('tj_sound', !sound.on()); renderToggle(el, sound.on(), '🔔 Heli'); }
-  else if (a === 'voice') { const v = !store.get('tj_voice', true); store.set('tj_voice', v); renderToggle(el, v, '🗣 Hääl'); if (!v) try { speechSynthesis.cancel(); } catch (e) {} }
+  else if (a === 'voice') { const v = !voiceOn(); store.set('tj_voice', v); renderToggle(el, v, '🗣 Hääl'); if (!v) voiceStop(); }
 });
 function renderToggle(el, on, label) { el.setAttribute('aria-pressed', on); el.textContent = `${label} ${on ? 'sees' : 'väljas'}`; }
 

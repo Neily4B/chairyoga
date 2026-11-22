@@ -17,6 +17,13 @@ add `--force` to regenerate all. Change `VOICE`/`SPEED` at the top of that scrip
 To use a family member's recording instead, record the same phrase and save it over the matching file in `audio/`
 (the browser console command `allPhrases()` lists every phrase and its file name).
 
+## Family voice (Pere hääl)
+The 🎙 **Pere hääl** page (link at the bottom of the start page) lets a family member record any prompt in their own
+voice. Recordings are kept on that device and played instead of the generated voice; anything not recorded falls back
+to Külli. To make recordings play on *every* device, tap **⬇ Laadi salvestused alla** to download a file, then run
+`node tools/import-family.js <file>.json` and commit `audio/`. Imported clips are listed in `audio/family.json` and
+`tools/make-voice.js` never overwrites them.
+
 ## Hosting
 It is a static site (`index.html`, `manifest.webmanifest`, `sw.js`, `icons/`). Enable GitHub Pages
 (Settings → Pages → Deploy from branch) and open the URL on the tablet/phone, then "Add to Home Screen".

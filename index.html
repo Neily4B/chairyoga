@@ -112,6 +112,13 @@
   .prep .label { font-size: 1.3rem; color: var(--muted); font-weight: 700; margin-top: 8px; }
   .done { text-align: center; padding-top: 20px; }
   .done .flower { font-size: 4rem; }
+  .rec-row { background: #fff; border: 2px solid var(--line); border-radius: 16px; padding: 10px 12px; margin: 10px 0; }
+  .rec-text { font-weight: 600; margin-bottom: 8px; }
+  .rec-text .ok { color: var(--ok); font-weight: 800; }
+  .rec-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rec-btns .chip { padding: 0 14px; }
+  .chip.recording { background: #c62828; border-color: #c62828; color: #fff; }
+  .en { font-size: .85rem; }
   .cheer { font-size: 1.9rem; font-weight: 800; color: var(--blue); margin: .1em 0 .3em; }
   .done h1.cheer { font-size: 2.3rem; }
   details { background: #fff; border: 2px solid var(--line); border-radius: 16px; padding: 10px 16px; margin-top: 16px; }
@@ -608,13 +615,54 @@ const clipUrl = t => 'audio/' + hash(speechFor(t)) + '.mp3';
 
 const voiceOn = () => store.get('tj_voice', true);
 const clips = new Map();
+/* Family voice: recordings made in the app, kept on this device (IndexedDB), keyed like the clip files. */
+const idb = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('toolijooga', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('rec');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const tx = (mode, fn) => open().then(d => new Promise((res, rej) => {
+    const t = d.transaction('rec', mode), q = fn(t.objectStore('rec'));
+    t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error);
+  }));
+  return {
+    get: k => tx('readonly', st => st.get(k)).catch(() => null),
+    set: (k, v) => tx('readwrite', st => st.put(v, k)),
+    del: k => tx('readwrite', st => st.delete(k)),
+    keys: () => tx('readonly', st => st.getAllKeys()).catch(() => [])
+  };
+})();
+const familyOn = () => store.get('tj_family', true);
+const clipKey = t => hash(speechFor(t));
+const decode = ab => new Promise((res, rej) => audio().decodeAudioData(ab, res, rej));
+// Cut silence from the start and end of a home recording so cues stay in step.
+function trimSilence(b) {
+  const d = b.getChannelData(0), thr = 0.02, pad = Math.floor(b.sampleRate * 0.1);
+  let a = 0, z = d.length - 1;
+  while (a < z && Math.abs(d[a]) < thr) a++;
+  while (z > a && Math.abs(d[z]) < thr) z--;
+  a = Math.max(0, a - pad); z = Math.min(d.length - 1, z + pad);
+  if (z - a < b.sampleRate * 0.2) return b;
+  const out = actx.createBuffer(1, z - a + 1, b.sampleRate);
+  out.getChannelData(0).set(d.subarray(a, z + 1));
+  return out;
+}
 function loadClip(text) {
   const url = clipUrl(text);
   if (!clips.has(url)) {
-    clips.set(url, fetch(url)
-      .then(r => { if (!r.ok) throw new Error('missing'); return r.arrayBuffer(); })
-      .then(ab => new Promise((res, rej) => audio().decodeAudioData(ab, res, rej)))
-      .catch(() => { clips.delete(url); return null; }));
+    clips.set(url, (async () => {
+      try {
+        if (familyOn()) {
+          const rec = await idb.get(clipKey(text));
+          if (rec && rec.blob) { const b = await decode(await rec.blob.arrayBuffer()).catch(() => null); if (b) return trimSilence(b); }
+        }
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('missing');
+        return await decode(await r.arrayBuffer());
+      } catch (e) { clips.delete(url); return null; }
+    })());
   }
   return clips.get(url);
 }
@@ -695,7 +743,97 @@ function homeView() {
     <div class="sizes" role="group" aria-label="Teksti suurus">
       <span class="muted">Teksti suurus:</span>
       ${SIZES.map((s, i) => `<button class="chip" data-size="${s}" aria-pressed="${s === size}" style="font-size:${18 + i * 5}px">A</button>`).join('')}
+    </div>
+    <p class="center" style="margin-top:22px"><button class="chip" data-go="#/pere" style="padding:0 18px">🎙 Pere hääl</button></p>`;
+}
+
+function familyGroups() {
+  const cues = [...new Set(EX.flatMap(e => e.frames.map(f => f.say)).filter(Boolean))];
+  return [
+    { name: 'Tervitused ja üleminekud', en: 'Greetings & transitions', items: [PHRASES.start, PHRASES.next, PHRASES.up, PHRASES.down, PHRASES.done] },
+    { name: 'Harjutuste nimed', en: 'Exercise names', items: EX.map(e => e.title) },
+    { name: 'Juhised harjutuste ajal', en: 'Spoken cues during exercises', items: cues },
+    { name: 'Raamatu juhendid (pikad)', en: 'Book instructions (long, optional)', items: EX.map(guideSpeech).concat(safetySpeech()), long: true }
+  ];
+}
+let recorder = null, micStream = null;
+
+async function familyView() {
+  $app.className = 'wrap';
+  const have = new Set(await idb.keys());
+  const groups = familyGroups();
+  const short = groups.filter(g => !g.long).flatMap(g => g.items);
+  const done = short.filter(t => have.has(clipKey(t))).length;
+  const row = t => {
+    const k = clipKey(t), rec = have.has(k);
+    return `<div class="rec-row" data-key="${k}">
+      <div class="rec-text">${rec ? '<span class="ok">✓</span> ' : ''}${esc(speechFor(t))}</div>
+      <div class="rec-btns">
+        <button class="chip rec" data-act="rec" data-text="${esc(t)}">🎙 Salvesta</button>
+        <button class="chip" data-act="recplay" data-text="${esc(t)}">▶ Kuula</button>
+        ${rec ? `<button class="chip" data-act="recdel" data-text="${esc(t)}" aria-label="Kustuta">🗑</button>` : ''}
+      </div></div>`;
+  };
+  $app.innerHTML = `
+    <div class="topbar"><button class="back" data-go="#/">◀ Tagasi</button></div>
+    <h1>🎙 Pere hääl</h1>
+    <p>Salvesta juhised oma häälega – siis kuuleb Ingrid harjutuste ajal sinu häält. Lauseid, mida pole salvestatud, loeb ette Külli.</p>
+    <p class="muted en">Family voice: record the prompts in your own voice. Tap 🎙, read the sentence, tap ⏹. Anything not recorded is read by the built-in voice (Külli). Recordings stay on this device.</p>
+    <div class="stat"><b>Salvestatud ${done} / ${short.length}</b> lauset<br>
+      <button class="chip" data-act="family" aria-pressed="${familyOn()}" style="margin-top:10px">Kasuta pere häält: ${familyOn() ? 'sees' : 'väljas'}</button></div>
+    ${groups.map(g => g.long
+      ? `<details><summary>${g.name}</summary><p class="muted en">${g.en}</p>${g.items.map(row).join('')}</details>`
+      : `<h2>${g.name}</h2><p class="muted en">${g.en}</p>${g.items.map(row).join('')}`).join('')}
+    <div class="box reps" style="margin-top:24px">
+      <b>Salvestasid teises seadmes?</b> Laadi fail alla ja saada see edasi – siis saab salvestused rakendusse lisada, et need kõlaksid igas seadmes.
+      <div class="muted en" style="margin-top:6px">Recorded on a different phone? Download the file and send it on, and the recordings can be built into the app for every device.</div>
+      <button class="btn sec small" data-act="export" style="margin-top:12px">⬇ Laadi salvestused alla</button>
     </div>`;
+}
+
+async function startRecording(el, text) {
+  if (recorder) { recorder.stop(); return; }
+  voiceStop();
+  try {
+    micStream = micStream || await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch (e) {
+    alert('Mikrofoni ei saanud kasutada. Luba mikrofon brauseri seadetes.\n(Microphone access was blocked – allow it in the browser settings.)');
+    return;
+  }
+  const chunks = [];
+  recorder = new MediaRecorder(micStream);
+  recorder.ondataavailable = ev => ev.data.size && chunks.push(ev.data);
+  const limit = setTimeout(() => recorder && recorder.stop(), 60000);
+  recorder.onstop = async () => {
+    clearTimeout(limit);
+    const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' });
+    recorder = null;
+    micStream.getTracks().forEach(t => t.stop()); micStream = null;
+    if (blob.size > 1000) {
+      await idb.set(clipKey(text), { blob, type: blob.type, text: speechFor(text), when: Date.now() });
+      clips.delete(clipUrl(text));
+      await familyView();
+      speak([text]);
+    } else { await familyView(); }
+  };
+  recorder.start();
+  el.textContent = '⏹ Lõpeta'; el.classList.add('recording');
+}
+
+async function exportRecordings() {
+  const keys = await idb.keys();
+  if (!keys.length) return alert('Salvestusi veel ei ole. (No recordings yet.)');
+  const items = [];
+  for (const k of keys) {
+    const r = await idb.get(k);
+    const bytes = new Uint8Array(await r.blob.arrayBuffer());
+    let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    items.push({ key: k, text: r.text, type: r.type, data: btoa(bin) });
+  }
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ app: 'toolijooga', version: 1, items })], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = 'toolijooga-pere-haal.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 function planView() {
@@ -926,11 +1064,14 @@ function route() {
   const parts = h.slice(2).split('/');
   if (parts[0] !== 'harjuta' && session) quitSession();
   if (parts[0] !== 'valmis') voiceStop();
+  if (recorder) { recorder.onstop = null; try { recorder.stop(); } catch (e) {} recorder = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   window.scrollTo(0, 0);
   switch (parts[0]) {
     case '': return homeView();
     case 'kava': return planView();
     case 'ohutus': return safetyView();
+    case 'pere': return familyView();
     case 'raamat': return parts[1] ? pageView(parts[1]) : bookView();
     case 'harjuta': return startSession(parts[1]);
     case 'valmis': return go('#/');
@@ -946,6 +1087,11 @@ $app.addEventListener('click', ev => {
   if (el.dataset.size) { store.set('tj_size', +el.dataset.size); applySize(); return homeView(); }
   const a = el.dataset.act;
   if (a === 'quit') return go('#/');
+  if (a === 'rec') return startRecording(el, el.dataset.text);
+  if (a === 'recplay') { voiceStop(); return speak([el.dataset.text]); }
+  if (a === 'recdel') { if (confirm('Kustutan selle salvestuse? (Delete this recording?)')) idb.del(clipKey(el.dataset.text)).then(() => { clips.delete(clipUrl(el.dataset.text)); familyView(); }); return; }
+  if (a === 'family') { store.set('tj_family', !familyOn()); clips.clear(); return familyView(); }
+  if (a === 'export') return exportRecordings();
   if (a === 'listen') {
     if (voiceBusy()) { voiceStop(); el.textContent = '🔊 Kuula juhendit'; return; }
     const w = el.dataset.what;

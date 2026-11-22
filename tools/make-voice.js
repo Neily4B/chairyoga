@@ -19,11 +19,16 @@ const force = process.argv.includes('--force');
   const phrases = await p.evaluate(() => allPhrases());
   await b.close();
 
+  // Family recordings (tools/import-family.js) are never overwritten or removed.
+  const famFile = path.join(root, 'audio', 'family.json');
+  const family = fs.existsSync(famFile) ? JSON.parse(fs.readFileSync(famFile, 'utf8')) : {};
+  const isFamily = file => Object.prototype.hasOwnProperty.call(family, path.basename(file, '.mp3'));
+
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-'));
   let made = 0;
   for (const { text, file } of phrases) {
     const out = path.join(root, file);
-    if (!force && fs.existsSync(out)) continue;
+    if (isFamily(file) || (!force && fs.existsSync(out))) continue;
     const wav = path.join(tmp, 'clip.wav');
     // curl (rather than fetch) so HTTPS proxies are respected.
     execFileSync('curl', ['-sS', '--fail', '--retry', '4', '--retry-all-errors', '--retry-delay', '2', '-m', '120',
@@ -37,7 +42,7 @@ const force = process.argv.includes('--force');
   // Remove clips for phrases that no longer exist.
   const keep = new Set(phrases.map(x => path.basename(x.file)));
   for (const f of fs.readdirSync(path.join(root, 'audio'))) {
-    if (f.endsWith('.mp3') && !keep.has(f)) { fs.unlinkSync(path.join(root, 'audio', f)); console.log('removed old clip', f); }
+    if (f.endsWith('.mp3') && !keep.has(f) && !isFamily(f)) { fs.unlinkSync(path.join(root, 'audio', f)); console.log('removed old clip', f); }
   }
   // List used by the service worker to make every clip available offline.
   fs.writeFileSync(path.join(root, 'audio', 'list.json'), JSON.stringify(phrases.map(x => x.file).sort(), null, 1));

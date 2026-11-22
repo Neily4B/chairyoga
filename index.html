@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="et">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Toolijooga</title>
+<meta name="description" content="Rahulikud joogaharjutused toolil istudes">
+<meta name="theme-color" content="#0072ce">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Toolijooga">
+<style>
+  :root {
+    --fs: 22px;
+    --bg: #fbf7ef;
+    --card: #ffffff;
+    --ink: #1f2328;
+    --muted: #4f5866;
+    --blue: #0072ce;
+    --blue-d: #005aa3;
+    --line: #e4dccd;
+    --warn-bg: #fff3d1;
+    --warn-ink: #6b4500;
+    --ok: #2e7d32;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: var(--fs); -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 16px 16px calc(28px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 2rem; line-height: 1.15; margin: .3em 0 .2em; }
+  h2 { font-size: 1.45rem; line-height: 1.2; margin: .4em 0 .3em; }
+  p { margin: .4em 0 .8em; }
+  .muted { color: var(--muted); }
+  .center { text-align: center; }
+
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: .5em;
+    width: 100%; min-height: 76px; padding: 14px 20px; margin: 14px 0;
+    border-radius: 20px; border: 3px solid var(--blue);
+    background: var(--blue); color: #fff;
+    font: inherit; font-size: 1.2rem; font-weight: 700; text-align: center;
+    cursor: pointer; text-decoration: none; -webkit-tap-highlight-color: transparent;
+  }
+  .btn.sec { background: #fff; color: var(--blue); }
+  .btn.small { min-height: 60px; font-size: 1rem; margin: 0; border-radius: 16px; }
+  .btn:active { transform: scale(.98); }
+  .btn:focus-visible, .chip:focus-visible, .card:focus-visible { outline: 4px solid #ffb703; outline-offset: 3px; }
+  .btn .big { font-size: 1.4em; line-height: 1; }
+  .btn .stack { display: flex; flex-direction: column; line-height: 1.2; }
+  .btn .stack small { font-weight: 500; font-size: .8em; opacity: .9; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .back {
+    display: inline-flex; align-items: center; gap: .3em; min-height: 56px; padding: 8px 18px;
+    border-radius: 14px; border: 2px solid var(--line); background: #fff; color: var(--ink);
+    font: inherit; font-weight: 700; cursor: pointer; text-decoration: none;
+  }
+
+  .hero { text-align: center; padding: 8px 0 4px; }
+  .hero svg { width: min(62vw, 260px); height: auto; }
+  .stat { background: #fff; border: 2px solid var(--line); border-radius: 18px; padding: 12px 16px; text-align: center; }
+
+  .sizes { display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 18px; }
+  .chip {
+    min-width: 64px; min-height: 56px; border-radius: 14px; border: 2px solid var(--line);
+    background: #fff; color: var(--ink); font: inherit; font-weight: 700; cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { border-color: var(--blue); background: #e6f1fb; color: var(--blue-d); }
+
+  .list { display: grid; gap: 14px; margin-top: 10px; }
+  .card {
+    display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 18px;
+    background: var(--card); border: 2px solid var(--line); color: var(--ink); text-decoration: none; cursor: pointer;
+    font: inherit; text-align: left; width: 100%;
+  }
+  .card svg { width: 84px; height: 100px; flex: none; }
+  .card .num { color: var(--blue); font-weight: 800; }
+  .card .t { font-weight: 700; font-size: 1.1rem; line-height: 1.2; }
+  .card .s { color: var(--muted); font-size: .9rem; }
+
+  .figure { display: block; margin: 0 auto; width: 100%; max-width: 340px; height: auto; }
+  .cue {
+    text-align: center; font-size: 1.45rem; font-weight: 800; color: var(--blue-d);
+    min-height: 2.6em; display: flex; align-items: center; justify-content: center; padding: 0 8px;
+  }
+  .steps { padding-left: 1.4em; margin: .4em 0 1em; }
+  .steps li { margin: .45em 0; padding-left: .2em; }
+  .box { border-radius: 16px; padding: 12px 16px; margin: 12px 0; }
+  .box.reps { background: #e6f1fb; color: #063a66; }
+  .box.warn { background: var(--warn-bg); color: var(--warn-ink); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+
+  /* Session */
+  .sess-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sess-count { font-weight: 700; color: var(--muted); }
+  .sess-title { text-align: center; font-size: 1.6rem; font-weight: 800; margin: 4px 0 0; line-height: 1.2; }
+  .sess-fig { max-width: 360px; max-height: 42vh; }
+  .timer { text-align: center; font-size: 3rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; margin: 4px 0 10px; }
+  .bar { height: 14px; background: #e9e2d4; border-radius: 99px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--blue); border-radius: 99px; transition: width .25s linear; }
+  .controls { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 10px; margin-top: 16px; }
+  .controls .btn { margin: 0; min-height: 80px; font-size: 1.05rem; padding: 10px; }
+  .toggles { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+  .prep { text-align: center; }
+  .prep .label { font-size: 1.3rem; color: var(--muted); font-weight: 700; margin-top: 8px; }
+  .done { text-align: center; padding-top: 20px; }
+  .done .flower { font-size: 4rem; }
+  details { background: #fff; border: 2px solid var(--line); border-radius: 16px; padding: 10px 16px; margin-top: 16px; }
+  summary { font-weight: 700; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+
+  @media (min-width: 900px) and (orientation: landscape) {
+    .wrap.wide { max-width: 1100px; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+    .sess-fig { max-height: 55vh; }
+  }
+</style>
+</head>
+<body>
+<main id="app" class="wrap" aria-live="polite"></main>
+
+<script>
+"use strict";
+
+/* ---------- Storage (safe) ---------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+/* ---------- Text size ---------- */
+const SIZES = [20, 24, 28];
+function applySize() { document.documentElement.style.setProperty('--fs', store.get('tj_size', 24) + 'px'); }
+applySize();
+
+/* ---------- Figure drawing ---------- */
+const C = { skin: '#f1c7a1', hair: '#c9ccd3', shirt: '#0072ce', pants: '#3a414c', shoe: '#22262d', chairBack: '#dbb58e', seat: '#b98a5e', chairLeg: '#9c7148', floor: '#e3d9c6', cheek: '#f39b9b', face: '#5b3a29' };
+
+const BASE = {
+  head: [100, 52], neck: [100, 74],
+  sL: [80, 82], sR: [120, 82],
+  eL: [73, 112], eR: [127, 112],
+  hL: [86, 140], hR: [114, 140],
+  hipL: [90, 146], hipR: [110, 146],
+  kL: [85, 160], kR: [115, 160],
+  aL: [85, 212], aR: [115, 212],
+  tL: [79, 219], tR: [121, 219],
+  hr: 6.5, eyes: 1
+};
+const P = o => Object.assign({}, BASE, o || {});
+
+// Mirror a pose (left/right swap) so exercises can be done on both sides.
+function mirror(o) {
+  const out = {};
+  for (const k in o) {
+    const v = o[k];
+    let nk = k;
+    if (/L$/.test(k)) nk = k.slice(0, -1) + 'R';
+    else if (/R$/.test(k)) nk = k.slice(0, -1) + 'L';
+    out[nk] = Array.isArray(v) ? [200 - v[0], v[1]] : v;
+  }
+  return out;
+}
+
+const r1 = n => Math.round(n * 10) / 10;
+function lerpPose(a, b, t) {
+  const o = {};
+  for (const k in a) {
+    const x = a[k], y = b[k];
+    o[k] = Array.isArray(x) ? [r1(x[0] + (y[0] - x[0]) * t), r1(x[1] + (y[1] - x[1]) * t)] : x + (y - x) * t;
+  }
+  return o;
+}
+
+const CHAIR = `
+  <line x1="20" y1="232" x2="180" y2="232" stroke="${C.floor}" stroke-width="3" stroke-linecap="round"/>
+  <rect x="60" y="64" width="80" height="90" rx="10" fill="${C.chairBack}"/>
+  <line x1="61" y1="158" x2="58" y2="230" stroke="${C.chairLeg}" stroke-width="7" stroke-linecap="round"/>
+  <line x1="139" y1="158" x2="142" y2="230" stroke="${C.chairLeg}" stroke-width="7" stroke-linecap="round"/>
+  <rect x="52" y="146" width="96" height="14" rx="6" fill="${C.seat}"/>`;
+
+function poseSVG(p) {
+  const L = (a, b, w, c) => `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const [hx, hy] = p.head;
+  const ang = r1(Math.atan2(p.head[0] - p.neck[0], p.neck[1] - p.head[1]) * 180 / Math.PI);
+  const eyes = p.eyes > 0.5
+    ? `<circle cx="${hx - 6}" cy="${hy + 1}" r="2.2" fill="${C.face}"/><circle cx="${hx + 6}" cy="${hy + 1}" r="2.2" fill="${C.face}"/>`
+    : `<path d="M${hx - 8} ${hy + 1} q2 2 4 0 M${hx + 4} ${hy + 1} q2 2 4 0" stroke="${C.face}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+  return `
+  <g>
+    <path d="M${p.hipL} L${p.hipR} L${p.kR} L${p.kL} Z" fill="${C.pants}" stroke="${C.pants}" stroke-width="12" stroke-linejoin="round"/>
+    ${L(p.kL, p.aL, 11, C.pants)}${L(p.kR, p.aR, 11, C.pants)}
+    ${L(p.aL, p.tL, 9, C.shoe)}${L(p.aR, p.tR, 9, C.shoe)}
+    <path d="M${p.sL} L${p.sR} L${p.hipR} L${p.hipL} Z" fill="${C.shirt}" stroke="${C.shirt}" stroke-width="12" stroke-linejoin="round"/>
+    ${L(p.neck, p.head, 9, C.skin)}
+    <g transform="rotate(${ang} ${hx} ${hy})">
+      <circle cx="${hx}" cy="${hy - 17}" r="7" fill="${C.hair}"/>
+      <circle cx="${hx}" cy="${hy}" r="16" fill="${C.skin}"/>
+      <path d="M${hx - 16} ${hy - 1} A16 16 0 0 1 ${hx + 16} ${hy - 1} C${hx + 9} ${hy - 9} ${hx - 9} ${hy - 9} ${hx - 16} ${hy - 1} Z" fill="${C.hair}"/>
+      ${eyes}
+      <circle cx="${hx - 10}" cy="${hy + 7}" r="2.6" fill="${C.cheek}" opacity=".55"/>
+      <circle cx="${hx + 10}" cy="${hy + 7}" r="2.6" fill="${C.cheek}" opacity=".55"/>
+      <path d="M${hx - 5} ${hy + 8} Q${hx} ${hy + 12} ${hx + 5} ${hy + 8}" stroke="${C.face}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    </g>
+    ${L(p.sL, p.eL, 10, C.shirt)}${L(p.eL, p.hL, 9, C.skin)}
+    ${L(p.sR, p.eR, 10, C.shirt)}${L(p.eR, p.hR, 9, C.skin)}
+    <circle cx="${p.hL[0]}" cy="${p.hL[1]}" r="${r1(p.hr)}" fill="${C.skin}"/>
+    <circle cx="${p.hR[0]}" cy="${p.hR[1]}" r="${r1(p.hr)}" fill="${C.skin}"/>
+  </g>`;
+}
+
+function figureSVG(pose, cls, label) {
+  return `<svg class="${cls || 'figure'}" viewBox="0 0 200 240" role="img" aria-label="${label || 'Joonis'}">${CHAIR}<g class="fig">${poseSVG(P(pose))}</g></svg>`;
+}
+
+const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+/* Animates an SVG through keyframes. Returns a controller. */
+const running = new Set();
+function animate(svg, frames, onCue) {
+  const g = svg.querySelector('.fig');
+  const fs = frames.map(f => ({ d: f.d, p: P(f.p), say: f.say || '' }));
+  const total = fs.reduce((s, f) => s + f.d, 0);
+  let t = 0, last = performance.now(), paused = false, raf = 0, lastCue = null;
+  const ctl = {
+    setPaused(b) { paused = b; last = performance.now(); },
+    stop() { cancelAnimationFrame(raf); running.delete(ctl); }
+  };
+  function step(now) {
+    if (!paused) t += (now - last) / 1000;
+    last = now;
+    let tt = t % total, i = 0;
+    while (tt > fs[i].d) { tt -= fs[i].d; i++; }
+    const prev = fs[(i - 1 + fs.length) % fs.length];
+    g.innerHTML = poseSVG(lerpPose(prev.p, fs[i].p, ease(Math.min(1, tt / fs[i].d))));
+    if (onCue && fs[i].say !== lastCue) { lastCue = fs[i].say; onCue(lastCue); }
+    raf = requestAnimationFrame(step);
+  }
+  raf = requestAnimationFrame(step);
+  running.add(ctl);
+  return ctl;
+}
+function stopAll() { running.forEach(c => c.stop()); }
+
+/* ---------- Exercises (Estonian) ---------- */
+const belly = { eL: [70, 108], eR: [130, 108], hL: [92, 122], hR: [108, 122] };
+const hold = { hL: [64, 150], hR: [136, 150], eL: [66, 120], eR: [134, 120] };
+
+const leanL = { head: [86, 56], neck: [94, 76], sL: [77, 88], sR: [115, 78], eR: [114, 46], hR: [96, 20], eL: [66, 118], hL: [63, 148] };
+const twistL = { head: [94, 53], neck: [98, 74], sL: [86, 84], sR: [118, 80], eR: [106, 118], hR: [88, 154], eL: [70, 110], hL: [64, 146] };
+const kneeR = Object.assign({}, hold, { kR: [116, 136], aR: [117, 186], tR: [123, 192] });
+const legR = Object.assign({}, hold, { kR: [115, 156], aR: [118, 174], tR: [119, 163] });
+const liftR = Object.assign({}, hold, { kR: [116, 152], aR: [118, 198] });
+
+function ankleFrames(side) {
+  const m = side === 'R' ? (o => o) : mirror;
+  const [ax, ay] = [118, 198], r = 7;
+  const out = [{ d: 1.5, p: m(Object.assign({}, liftR, { tR: [ax + r, ay] })), say: side === 'R' ? 'Tõsta parem jalg' : 'Tõsta vasak jalg' }];
+  for (let k = 0; k < 2; k++) {
+    for (const a of [90, 180, 270, 360]) {
+      const rad = a * Math.PI / 180;
+      out.push({ d: .7, p: m(Object.assign({}, liftR, { tR: [r1(ax + r * Math.cos(rad)), r1(ay + r * Math.sin(rad))] })), say: 'Tee jalalabaga ringe' });
+    }
+  }
+  out.push({ d: 1.2, p: {}, say: 'Jalg alla' });
+  return out;
+}
+
+const EX = [
+  {
+    id: 'hingamine', title: 'Sügav hingamine', sub: 'Rahustab ja valmistab keha ette.',
+    steps: ['Istu sirgelt, õlad on lõdvad.', 'Pane käed kõhule.', 'Hinga aeglaselt nina kaudu sisse ja tunne, kuidas kõht tõuseb.', 'Hinga aeglaselt suu kaudu välja.'],
+    reps: '5 korda',
+    care: 'Ära hinga liiga sügavalt. Kui pea hakkab ringi käima, hinga tavapäraselt.',
+    frames: [
+      { d: 4, p: Object.assign({}, belly, { eL: [67, 104], eR: [133, 104], hL: [90, 118], hR: [110, 118], sL: [79, 79], sR: [121, 79], head: [100, 49], neck: [100, 71] }), say: 'Hinga sisse…' },
+      { d: 5, p: belly, say: 'Hinga välja…' }
+    ]
+  },
+  {
+    id: 'kael', title: 'Pea kallutamine', sub: 'Leevendab kaela pinget.',
+    steps: ['Istu sirgelt ja vaata otse ette.', 'Kalluta pead aeglaselt paremale, kõrv õla poole.', 'Too pea tagasi keskele.', 'Kalluta pead aeglaselt vasakule ja too tagasi keskele.'],
+    reps: '3 korda kummalegi poole',
+    care: 'Liiguta pead väga aeglaselt. Ära keeruta pead ringiratast.',
+    frames: [
+      { d: 2.5, p: { head: [113, 57] }, say: 'Kalluta paremale' },
+      { d: 2, p: { head: [113, 57] }, say: 'Hoia' },
+      { d: 2.5, p: {}, say: 'Keskele' },
+      { d: 2.5, p: { head: [87, 57] }, say: 'Kalluta vasakule' },
+      { d: 2, p: { head: [87, 57] }, say: 'Hoia' },
+      { d: 2.5, p: {}, say: 'Keskele' }
+    ]
+  },
+  {
+    id: 'olad', title: 'Õlgade ringid', sub: 'Lõdvestab õlgu ja ülaselga.',
+    steps: ['Lase käed lõdvalt sülle.', 'Tõsta õlad kõrvade poole.', 'Vii õlad taha ja lase alla.', 'Tee aeglaseid ringe.'],
+    reps: '5 ringi tahapoole, siis 5 ringi ettepoole',
+    frames: [
+      { d: 1.6, p: { sL: [80, 72], sR: [120, 72], eL: [73, 102], eR: [127, 102], hL: [86, 132], hR: [114, 132], neck: [100, 71] }, say: 'Õlad üles' },
+      { d: 1.6, p: { sL: [84, 77], sR: [116, 77], eL: [77, 107], eR: [123, 107], hL: [88, 137], hR: [112, 137] }, say: 'Taha' },
+      { d: 1.6, p: {}, say: 'Ja alla' }
+    ]
+  },
+  {
+    id: 'kaed', title: 'Käte tõstmine', sub: 'Avab rindkere ja parandab rühti.',
+    steps: ['Käed puhkavad reitel.', 'Hinga sisse ja tõsta käed aeglaselt üles pea kohale.', 'Hinga välja ja lase käed aeglaselt alla.'],
+    reps: '5 korda',
+    care: 'Kui õlg valutab, tõsta käed ainult õlgade kõrgusele.',
+    frames: [
+      { d: 4, p: { eL: [70, 58], eR: [130, 58], hL: [82, 26], hR: [118, 26], sL: [80, 80], sR: [120, 80] }, say: 'Hinga sisse, käed üles' },
+      { d: 1.2, p: { eL: [70, 58], eR: [130, 58], hL: [82, 26], hR: [118, 26], sL: [80, 80], sR: [120, 80] }, say: 'Hoia' },
+      { d: 4, p: {}, say: 'Hinga välja, käed alla' },
+      { d: 1, p: {}, say: 'Puhka' }
+    ]
+  },
+  {
+    id: 'kulg', title: 'Külgsirutus', sub: 'Venitab keha külgi.',
+    steps: ['Istu sirgelt, mõlemad jalad põrandal.', 'Hoia ühe käega tooli istmest kinni.', 'Tõsta teine käsi üles ja kalluta ülakeha ettevaatlikult kõrvale.', 'Tule tagasi keskele ja lase käsi alla.', 'Korda teisele poole.'],
+    reps: '3 korda kummalegi poole',
+    care: 'Kalluta ainult nii palju, kui on mugav. Hoia vaba käega toolist kinni.',
+    frames: [
+      { d: 3, p: leanL, say: 'Käsi üles, kaldu vasakule' },
+      { d: 2.5, p: leanL, say: 'Hoia ja hinga' },
+      { d: 3, p: {}, say: 'Tagasi keskele' },
+      { d: 3, p: mirror(leanL), say: 'Käsi üles, kaldu paremale' },
+      { d: 2.5, p: mirror(leanL), say: 'Hoia ja hinga' },
+      { d: 3, p: {}, say: 'Tagasi keskele' }
+    ]
+  },
+  {
+    id: 'keeramine', title: 'Istudes keeramine', sub: 'Liigutab selga ja muudab selle painduvamaks.',
+    steps: ['Istu sirgelt, jalad põrandal.', 'Pane parem käsi vasakule põlvele.', 'Keera ülakeha ja pead aeglaselt vasakule.', 'Hoia paar hingetõmmet ja tule tagasi keskele.', 'Korda teisele poole.'],
+    reps: '3 korda kummalegi poole',
+    care: 'Keera ainult nii palju, kui on mugav. Ära keera jõuga.',
+    frames: [
+      { d: 3, p: twistL, say: 'Keera vasakule' },
+      { d: 3, p: twistL, say: 'Hoia ja hinga' },
+      { d: 3, p: {}, say: 'Tagasi keskele' },
+      { d: 3, p: mirror(twistL), say: 'Keera paremale' },
+      { d: 3, p: mirror(twistL), say: 'Hoia ja hinga' },
+      { d: 3, p: {}, say: 'Tagasi keskele' }
+    ]
+  },
+  {
+    id: 'selg', title: 'Selja painutamine', sub: 'Liigutab selga ja kaela.',
+    steps: ['Pane käed põlvedele.', 'Hinga sisse, too rind ette ja vaata natuke üles.', 'Hinga välja, tee selg ümaraks ja vaata alla.'],
+    reps: '5 korda',
+    care: 'Ära vii pead liiga kaugele taha.',
+    frames: [
+      { d: 3.5, p: { head: [100, 47], neck: [100, 70], sL: [79, 80], sR: [121, 80], eL: [72, 120], eR: [128, 120], hL: [86, 156], hR: [114, 156] }, say: 'Hinga sisse, rind ette' },
+      { d: 3.5, p: { head: [100, 68], neck: [100, 82], sL: [82, 90], sR: [118, 90], eL: [77, 124], eR: [123, 124], hL: [86, 156], hR: [114, 156] }, say: 'Hinga välja, selg ümaraks' }
+    ]
+  },
+  {
+    id: 'marss', title: 'Põlvede tõstmine', sub: 'Tugevdab jalgu ja parandab vereringet.',
+    steps: ['Hoia kätega tooli istme servast kinni.', 'Tõsta parem põlv üles ja pane jalg alla.', 'Tõsta vasak põlv üles ja pane jalg alla.', 'Jätka rahulikult, nagu marsiksid.'],
+    reps: '10 korda kummagi jalaga',
+    frames: [
+      { d: 1.1, p: kneeR, say: 'Parem põlv üles' },
+      { d: 1.1, p: hold, say: 'Alla' },
+      { d: 1.1, p: mirror(kneeR), say: 'Vasak põlv üles' },
+      { d: 1.1, p: hold, say: 'Alla' }
+    ]
+  },
+  {
+    id: 'jalg', title: 'Jala sirutamine', sub: 'Tugevdab reie lihaseid.',
+    steps: ['Hoia kätega tooli istmest kinni.', 'Siruta parem jalg ette sirgeks.', 'Hoia 3 sekundit ja lase aeglaselt alla.', 'Korda vasaku jalaga.'],
+    reps: '5 korda kummagi jalaga',
+    care: 'Ära lukusta põlve. Kui reis väsib, puhka vahepeal.',
+    frames: [
+      { d: 2, p: legR, say: 'Siruta parem jalg' },
+      { d: 3, p: legR, say: 'Hoia… 1, 2, 3' },
+      { d: 2, p: hold, say: 'Aeglaselt alla' },
+      { d: 2, p: mirror(legR), say: 'Siruta vasak jalg' },
+      { d: 3, p: mirror(legR), say: 'Hoia… 1, 2, 3' },
+      { d: 2, p: hold, say: 'Aeglaselt alla' }
+    ]
+  },
+  {
+    id: 'pahkluu', title: 'Pahkluu ringid', sub: 'Liigutab pahkluid ja parandab vereringet.',
+    steps: ['Hoia kätega tooli istmest kinni.', 'Tõsta parem jalg veidi põrandast üles.', 'Tee jalalabaga aeglaseid ringe ühele ja siis teisele poole.', 'Korda vasaku jalaga.'],
+    reps: '5 ringi kummaski suunas',
+    care: 'Kui jalga on raske üleval hoida, jäta kand põrandale ja liiguta ainult varbaid.',
+    frames: ankleFrames('R').concat(ankleFrames('L'))
+  },
+  {
+    id: 'kannad', title: 'Kannad ja varbad', sub: 'Tugevdab sääri ja aitab tasakaalu.',
+    steps: ['Mõlemad jalad on põrandal.', 'Tõsta kannad üles, varbad jäävad põrandale.', 'Lase kannad alla.', 'Tõsta varbad üles, kannad jäävad põrandale.', 'Lase varbad alla.'],
+    reps: '10 korda',
+    frames: [
+      { d: 1.5, p: { aL: [85, 202], aR: [115, 202], kL: [85, 151], kR: [115, 151], tL: [80, 214], tR: [120, 214] }, say: 'Kannad üles' },
+      { d: 1.5, p: {}, say: 'Alla' },
+      { d: 1.5, p: { tL: [80, 210], tR: [120, 210] }, say: 'Varbad üles' },
+      { d: 1.5, p: {}, say: 'Alla' }
+    ]
+  },
+  {
+    id: 'sormed', title: 'Käed ja sõrmed', sub: 'Hoiab sõrmed ja randmed liikuvana.',
+    steps: ['Siruta käed enda ette.', 'Tee käed rusikasse.', 'Ava käed ja aja sõrmed laiali.', 'Lõpuks tee randmetega aeglaseid ringe.'],
+    reps: '10 korda',
+    frames: [
+      { d: 1.5, p: { eL: [79, 106], eR: [121, 106], hL: [84, 98], hR: [116, 98], hr: 5 }, say: 'Rusikas' },
+      { d: 1.5, p: { eL: [79, 106], eR: [121, 106], hL: [84, 98], hR: [116, 98], hr: 10 }, say: 'Sõrmed laiali' }
+    ]
+  },
+  {
+    id: 'lodvestus', title: 'Lõdvestus', sub: 'Rahulik lõpp.',
+    steps: ['Istu mugavalt, käed süles.', 'Sulge silmad, kui soovid.', 'Hinga rahulikult ja aeglaselt.', 'Tunne, kuidas keha lõdvestub.'],
+    reps: 'umbes 1 minut',
+    frames: [
+      { d: 5, p: { head: [100, 50], eyes: 0 }, say: 'Hinga sisse…' },
+      { d: 6, p: { eyes: 0 }, say: 'Hinga välja…' }
+    ]
+  }
+];
+const byId = Object.fromEntries(EX.map(e => [e.id, e]));
+
+const PLANS = {
+  luhike: { name: 'Lühike kava', about: 'umbes 7 minutit', secs: 45, ids: ['hingamine', 'kael', 'olad', 'kaed', 'kulg', 'marss', 'pahkluu', 'lodvestus'] },
+  pikk: { name: 'Täispikk kava', about: 'umbes 15 minutit', secs: 60, ids: EX.map(e => e.id) }
+};
+const PREP_SECS = 6;
+
+/* ---------- Helpers ---------- */
+const $app = document.getElementById('app');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const go = h => { location.hash = h; };
+const fmt = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 11 ? 'Tere hommikust!' : h < 18 ? 'Tere päevast!' : 'Tere õhtust!';
+}
+function korda(n) { return n === 1 ? '1 kord' : n + ' korda'; }
+
+function logStats() {
+  const log = store.get('tj_log', []);
+  if (!log.length) return 'Täna on hea päev alustamiseks.';
+  const now = Date.now(), DAY = 864e5;
+  const week = log.filter(d => now - new Date(d).getTime() < 7 * DAY).length;
+  const lastD = new Date(log[log.length - 1]); lastD.setHours(0, 0, 0, 0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - lastD) / DAY);
+  const when = diff === 0 ? 'täna' : diff === 1 ? 'eile' : diff + ' päeva tagasi';
+  return `Viimati harjutasid <b>${when}</b>.<br>Viimase 7 päeva jooksul: <b>${korda(week)}</b>.`;
+}
+
+/* ---------- Sound & voice ---------- */
+let actx = null;
+function audio() {
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {}
+  return actx;
+}
+function tone(freq, start, dur, vol) {
+  const a = audio(); if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine'; o.frequency.value = freq;
+  const t0 = a.currentTime + start;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(a.destination); o.start(t0); o.stop(t0 + dur + .05);
+}
+const sound = {
+  on: () => store.get('tj_sound', true),
+  chime() { if (this.on()) { tone(660, 0, .6, .25); tone(880, .18, .9, .2); } },
+  tick() { if (this.on()) tone(520, 0, .15, .12); }
+};
+
+let etVoice = null;
+function findVoice() {
+  try { etVoice = (speechSynthesis.getVoices() || []).find(v => /^et/i.test(v.lang)) || null; } catch (e) { etVoice = null; }
+}
+if ('speechSynthesis' in window) { findVoice(); speechSynthesis.onvoiceschanged = findVoice; }
+function say(text) {
+  if (!etVoice || !store.get('tj_voice', true)) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.voice = etVoice; u.lang = etVoice.lang; u.rate = .9; speechSynthesis.speak(u); } catch (e) {}
+}
+
+/* ---------- Keep screen awake during a session ---------- */
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && 'wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (session && document.visibilityState === 'visible') keepAwake(true); });
+
+/* ---------- Screens ---------- */
+function homeView() {
+  const size = store.get('tj_size', 24);
+  $app.className = 'wrap';
+  $app.innerHTML = `
+    <div class="hero">
+      ${figureSVG({ eL: [70, 58], eR: [130, 58], hL: [82, 26], hR: [118, 26] }, '', 'Naine istub toolil, käed üleval')}
+      <h1>Toolijooga</h1>
+      <p class="muted">${greeting()} Rahulikud harjutused toolil istudes.</p>
+    </div>
+    <div class="stat">${logStats()}</div>
+    <button class="btn" data-go="#/kava"><span class="big">▶</span> Alusta harjutamist</button>
+    <button class="btn sec" data-go="#/raamat"><span class="big">📖</span> Harjutuste raamat</button>
+    <button class="btn sec" data-go="#/ohutus"><span class="big">⚠️</span> Enne alustamist loe</button>
+    <div class="sizes" role="group" aria-label="Teksti suurus">
+      <span class="muted">Teksti suurus:</span>
+      ${SIZES.map((s, i) => `<button class="chip" data-size="${s}" aria-pressed="${s === size}" style="font-size:${18 + i * 5}px">A</button>`).join('')}
+    </div>`;
+}
+
+function planView() {
+  $app.className = 'wrap';
+  $app.innerHTML = `
+    <div class="topbar"><button class="back" data-go="#/">◀ Tagasi</button></div>
+    <h1>Vali kava</h1>
+    <p class="muted">Rakendus näitab iga harjutust ja loeb aega. Sina lihtsalt tee kaasa.</p>
+    ${Object.entries(PLANS).map(([k, p]) => `
+      <button class="btn ${k === 'pikk' ? 'sec' : ''}" data-go="#/harjuta/${k}">
+        <span class="stack">${p.name}<small>${p.about} · ${p.ids.length} harjutust</small></span>
+      </button>`).join('')}
+    <p class="muted center" style="margin-top:20px">Pane telefon või tahvel enda ette nii, et ekraan on hästi näha.</p>`;
+}
+
+function safetyView() {
+  $app.className = 'wrap';
+  $app.innerHTML = `
+    <div class="topbar"><button class="back" data-go="#/">◀ Tagasi</button></div>
+    <h1>Enne alustamist</h1>
+    <ol class="steps">
+      <li>Kasuta tugevat tooli, millel <b>ei ole rattaid</b>. Kõige parem on panna tool vastu seina.</li>
+      <li>Istu tooli esiosas, selg sirge, mõlemad jalad täies ulatuses põrandal.</li>
+      <li>Kanna mugavaid riideid. Hoia veeklaas lähedal.</li>
+      <li>Liigu aeglaselt ja rahulikult. Ära hoia hinge kinni.</li>
+      <li>Kerge venitus on hea, <b>valu ei ole</b>. Tee ainult nii palju, kui on mugav.</li>
+      <li>Iga päev natuke on parem kui harva palju.</li>
+    </ol>
+    <div class="box warn"><b>Lõpeta kohe ja puhka</b>, kui tunned valu, pearinglust, iiveldust, valu rinnus või õhupuudust.</div>
+    <div class="box warn">Kui sul on südame-, vererõhu- või liigeseprobleeme või oled hiljuti opereeritud, küsi enne alustamist nõu oma arstilt või füsioterapeudilt.</div>
+    <button class="btn" data-go="#/kava">Sain aru – alustame</button>`;
+}
+
+function bookView() {
+  $app.className = 'wrap';
+  $app.innerHTML = `
+    <div class="topbar"><button class="back" data-go="#/">◀ Tagasi</button></div>
+    <h1>Harjutuste raamat</h1>
+    <p class="muted">Vajuta harjutusele, et näha, kuidas seda teha.</p>
+    <div class="list">
+      ${EX.map((e, i) => `
+        <button class="card" data-go="#/raamat/${e.id}">
+          ${figureSVG(e.frames[0].p, '', e.title)}
+          <span><span class="num">${i + 1}.</span> <span class="t">${e.title}</span><br><span class="s">${e.sub}</span></span>
+        </button>`).join('')}
+    </div>`;
+}
+
+function exerciseBody(e) {
+  return `
+    <ol class="steps">${e.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
+    <div class="box reps"><b>Kordused:</b> ${esc(e.reps)}</div>
+    ${e.care ? `<div class="box warn"><b>Ettevaatust:</b> ${esc(e.care)}</div>` : ''}`;
+}
+
+function pageView(id) {
+  const i = EX.findIndex(e => e.id === id);
+  if (i < 0) return go('#/raamat');
+  const e = EX[i], prev = EX[i - 1], next = EX[i + 1];
+  $app.className = 'wrap wide';
+  $app.innerHTML = `
+    <div class="topbar"><button class="back" data-go="#/raamat">◀ Sisukord</button><span class="muted">${i + 1} / ${EX.length}</span></div>
+    <div class="split">
+      <div>
+        <h1>${e.title}</h1>
+        <p class="muted">${e.sub}</p>
+        ${figureSVG(e.frames[0].p, 'figure', e.title)}
+        <div class="cue" id="cue"></div>
+      </div>
+      <div>
+        ${exerciseBody(e)}
+        <div class="row">
+          ${prev ? `<button class="btn sec small" data-go="#/raamat/${prev.id}">◀ Eelmine</button>` : '<span></span>'}
+          ${next ? `<button class="btn sec small" data-go="#/raamat/${next.id}">Järgmine ▶</button>` : `<button class="btn sec small" data-go="#/">Avaleht</button>`}
+        </div>
+      </div>
+    </div>`;
+  const cue = document.getElementById('cue');
+  animate($app.querySelector('svg.figure'), e.frames, t => { cue.textContent = t; });
+}
+
+/* ---------- Guided session ---------- */
+let session = null, ticker = 0;
+
+function startSession(planKey) {
+  const plan = PLANS[planKey];
+  if (!plan) return go('#/kava');
+  audio();
+  session = { plan, idx: 0, phase: 'prep', left: PREP_SECS, paused: false, anim: null, started: Date.now() };
+  keepAwake(true);
+  renderSession();
+  clearInterval(ticker);
+  let last = performance.now();
+  ticker = setInterval(() => {
+    const now = performance.now(), dt = (now - last) / 1000; last = now;
+    if (!session || session.paused) return;
+    const before = Math.ceil(session.left);
+    session.left -= dt;
+    const after = Math.ceil(session.left);
+    if (after !== before && after <= 3 && after > 0) sound.tick();
+    if (session.left <= 0) advance(1); else updateClock();
+  }, 200);
+}
+
+function advance(dir) {
+  const s = session; if (!s) return;
+  if (dir > 0) {
+    if (s.phase === 'prep') { s.phase = 'go'; s.left = s.plan.secs; sound.chime(); }
+    else if (s.idx < s.plan.ids.length - 1) { s.idx++; s.phase = 'prep'; s.left = PREP_SECS; sound.chime(); }
+    else return finishSession();
+  } else {
+    if (s.phase === 'go' && s.plan.secs - s.left > 3) { s.left = s.plan.secs; }
+    else if (s.idx > 0) { s.idx--; s.phase = 'go'; s.left = s.plan.secs; }
+    else { s.phase = 'go'; s.left = s.plan.secs; }
+  }
+  s.paused = false;
+  renderSession();
+}
+
+function updateClock() {
+  const s = session; if (!s) return;
+  const t = document.getElementById('timer'), b = document.getElementById('bar');
+  const total = s.phase === 'prep' ? PREP_SECS : s.plan.secs;
+  if (t) t.textContent = s.phase === 'prep' ? Math.max(1, Math.ceil(s.left)) : fmt(s.left);
+  if (b) b.style.width = (100 * (1 - s.left / total)) + '%';
+}
+
+function renderSession() {
+  const s = session; stopAll();
+  const e = byId[s.plan.ids[s.idx]], n = s.plan.ids.length;
+  const toggles = `
+    <div class="toggles">
+      <button class="chip" data-act="sound" aria-pressed="${sound.on()}">🔔 Heli ${sound.on() ? 'sees' : 'väljas'}</button>
+      ${etVoice ? `<button class="chip" data-act="voice" aria-pressed="${store.get('tj_voice', true)}">🗣 Hääl ${store.get('tj_voice', true) ? 'sees' : 'väljas'}</button>` : ''}
+    </div>`;
+  $app.className = 'wrap wide';
+  if (s.phase === 'prep') {
+    $app.innerHTML = `
+      <div class="sess-head"><span class="sess-count">Harjutus ${s.idx + 1} / ${n}</span><button class="back" data-act="quit">✕ Lõpeta</button></div>
+      <div class="prep">
+        <div class="label">${s.idx === 0 ? 'Valmistu, alustame!' : 'Puhka hetk. Järgmine harjutus:'}</div>
+        <div class="sess-title">${e.title}</div>
+        ${figureSVG(e.frames[0].p, 'figure sess-fig', e.title)}
+        <div class="timer" id="timer"></div>
+        <div class="bar"><i id="bar"></i></div>
+      </div>
+      <div class="controls">
+        <button class="btn sec" data-act="prev">◀<br>Tagasi</button>
+        <button class="btn" data-act="pause">${s.paused ? '▶ Jätka' : '❚❚ Paus'}</button>
+        <button class="btn sec" data-act="next">Alusta<br>▶</button>
+      </div>
+      ${toggles}`;
+    say((s.idx === 0 ? 'Valmistu. ' : 'Järgmine harjutus. ') + e.title);
+  } else {
+    $app.innerHTML = `
+      <div class="sess-head"><span class="sess-count">Harjutus ${s.idx + 1} / ${n}</span><button class="back" data-act="quit">✕ Lõpeta</button></div>
+      <div class="split">
+        <div>
+          <div class="sess-title">${e.title}</div>
+          ${figureSVG(e.frames[0].p, 'figure sess-fig', e.title)}
+          <div class="cue" id="cue"></div>
+          <div class="timer" id="timer"></div>
+          <div class="bar"><i id="bar"></i></div>
+          <div class="controls">
+            <button class="btn sec" data-act="prev">◀<br>Tagasi</button>
+            <button class="btn" data-act="pause">${s.paused ? '▶ Jätka' : '❚❚ Paus'}</button>
+            <button class="btn sec" data-act="next">Edasi<br>▶</button>
+          </div>
+          ${toggles}
+        </div>
+        <div>
+          <details ${matchMedia('(min-width: 900px)').matches ? 'open' : ''}>
+            <summary>Kuidas teha?</summary>
+            ${exerciseBody(e)}
+          </details>
+        </div>
+      </div>`;
+    const cue = document.getElementById('cue');
+    s.anim = animate($app.querySelector('svg.figure'), e.frames, t => { cue.textContent = t; });
+    s.anim.setPaused(s.paused);
+  }
+  updateClock();
+}
+
+function finishSession() {
+  const s = session;
+  clearInterval(ticker); stopAll(); keepAwake(false);
+  const mins = Math.max(1, Math.round((Date.now() - s.started) / 60000));
+  const log = store.get('tj_log', []); log.push(new Date().toISOString()); store.set('tj_log', log.slice(-200));
+  session = null;
+  sound.chime(); say('Tubli! Harjutused on tehtud.');
+  history.replaceState(null, '', '#/valmis');
+  $app.className = 'wrap';
+  $app.innerHTML = `
+    <div class="done">
+      <div class="flower" aria-hidden="true">🌼</div>
+      <h1>Tubli!</h1>
+      <p style="font-size:1.2rem">Harjutused on tehtud.<br>Täna harjutasid umbes <b>${mins} ${mins === 1 ? 'minut' : 'minutit'}</b>.</p>
+      <p class="muted">Joo klaas vett ja puhka hetk.</p>
+      <button class="btn" data-go="#/">Avalehele</button>
+    </div>`;
+}
+
+function quitSession() {
+  clearInterval(ticker); stopAll(); keepAwake(false);
+  try { speechSynthesis.cancel(); } catch (e) {}
+  session = null;
+}
+
+/* ---------- Router & events ---------- */
+function route() {
+  stopAll();
+  const h = location.hash || '#/';
+  const parts = h.slice(2).split('/');
+  if (parts[0] !== 'harjuta' && session) quitSession();
+  window.scrollTo(0, 0);
+  switch (parts[0]) {
+    case '': return homeView();
+    case 'kava': return planView();
+    case 'ohutus': return safetyView();
+    case 'raamat': return parts[1] ? pageView(parts[1]) : bookView();
+    case 'harjuta': return startSession(parts[1]);
+    case 'valmis': return go('#/');
+    default: return homeView();
+  }
+}
+
+$app.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-go],[data-act],[data-size]');
+  if (!el) return;
+  if (el.dataset.go) return go(el.dataset.go);
+  if (el.dataset.size) { store.set('tj_size', +el.dataset.size); applySize(); return homeView(); }
+  const a = el.dataset.act;
+  if (a === 'quit') return go('#/');
+  if (!session) return;
+  if (a === 'next') advance(1);
+  else if (a === 'prev') advance(-1);
+  else if (a === 'pause') {
+    session.paused = !session.paused;
+    if (session.anim) session.anim.setPaused(session.paused);
+    el.textContent = session.paused ? '▶ Jätka' : '❚❚ Paus';
+  } else if (a === 'sound') { store.set('tj_sound', !sound.on()); renderToggle(el, sound.on(), '🔔 Heli'); }
+  else if (a === 'voice') { const v = !store.get('tj_voice', true); store.set('tj_voice', v); renderToggle(el, v, '🗣 Hääl'); if (!v) try { speechSynthesis.cancel(); } catch (e) {} }
+});
+function renderToggle(el, on, label) { el.setAttribute('aria-pressed', on); el.textContent = `${label} ${on ? 'sees' : 'väljas'}`; }
+
+window.addEventListener('hashchange', route);
+route();
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
